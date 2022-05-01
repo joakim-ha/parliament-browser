@@ -1,6 +1,5 @@
 import { Card, ListItem } from "@rneui/themed";
-import axios from "axios";
-import { useEffect, useState } from "react";
+import { useEffect, useContext } from "react";
 import {
   View,
   StyleSheet,
@@ -9,84 +8,22 @@ import {
   ActivityIndicator,
 } from "react-native";
 
-export const Details = ({ route }) => {
-  useEffect(() => {
-    const controller = new AbortController();
-    fetchTasksWithIndicator(route.params.id, controller)
-      .catch((err) => {
-        if (err.name !== "CanceledError") {
-          Alert.alert("Network error: " + err, "Please try again later");
-        } else {
-          console.log("Was cancelled");
-        }
-      })
-      .finally(() => setLoading(false));
+import { PersonDetailsContext } from "../providers/PersonDetailsProvider";
 
-    return () => controller.abort();
+export const Details = ({ route }) => {
+  const provider = useContext(PersonDetailsContext);
+
+  useEffect(() => {
+    provider.setId(route.params.id);
+
+    return () => provider.setId(null);
   }, []);
 
-  const [tasks, setTasks] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  const fetchTasksWithIndicator = async (id, controller) => {
-    const personResponse = await axios.get(
-      `https://api.lagtinget.ax/api/persons/${id}.json`,
-      {
-        signal: controller.signal,
-      }
-    );
-
-    const fetchedTasks = await Promise.all(
-      personResponse.data.bindings.map(async ({ organization, role }) => {
-        const organizationResponse = await axios.get(
-          `https://api.lagtinget.ax/api/organizations/${organization}.json`,
-          {
-            signal: controller.signal,
-          }
-        );
-
-        const roleResponse = await axios.get(
-          `https://api.lagtinget.ax/api/roles/${role}.json`,
-          {
-            signal: controller.signal,
-          }
-        );
-
-        return Promise.resolve({
-          organization: organizationResponse.data.title,
-          role: roleResponse.data.title,
-        });
-      })
-    );
-    setTasks(fetchedTasks);
-  };
-
-  const fetchTasksOneByOne = async (id) => {
-    const personResponse = await axios.get(
-      `https://api.lagtinget.ax/api/persons/${id}.json`
-    );
-
-    personResponse.data.bindings.map(async ({ organization, role }) => {
-      const organizationResponse = await axios.get(
-        `https://api.lagtinget.ax/api/organizations/${organization}.json`
-      );
-
-      const roleResponse = await axios.get(
-        `https://api.lagtinget.ax/api/roles/${role}.json`
-      );
-
-      setTasks((currentTasks) => {
-        const updatedTasks = [
-          ...currentTasks,
-          {
-            organization: organizationResponse.data.title,
-            role: roleResponse.data.title,
-          },
-        ];
-        return updatedTasks;
-      });
-    });
-  };
+  useEffect(() => {
+    if (provider.error) {
+      Alert.alert("Network error");
+    }
+  }, [provider.error]);
 
   const renderItem = ({ item }) => (
     <ListItem bottomDivider>
@@ -102,12 +39,12 @@ export const Details = ({ route }) => {
       <Card containerStyle={{ flex: 1, marginBottom: 15 }}>
         <Card.Title>Tasks</Card.Title>
         <Card.Divider />
-        {loading ? (
+        {provider.loading ? (
           <ActivityIndicator color="black" size="large" />
         ) : (
           <FlatList
             style={{ marginBottom: 50 }}
-            data={tasks}
+            data={provider.tasks}
             renderItem={renderItem}
             keyExtractor={(item, index) => index}
           />
